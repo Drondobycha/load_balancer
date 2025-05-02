@@ -1,5 +1,5 @@
 port: "8080"                     # Порт для HTTP-сервера
-strategy: least_conn             # Стратегия балансировки (round_robin или least_conn)
+strategy: round_robin             # Стратегия балансировки (round_robin или least_conn)
 backends:                        # Список бэкендов
   - "http://backend1:80"
   - "http://backend2:80"
