@@ -1,0 +1,9 @@
+port: "8080"
+strategy: least_conn
+backends:
+  - "http://backend1:80"
+  - "http://backend2:80"
+health_check_interval: 30s
+rate_limit:
+  default_capacity: 10000
+  default_rate: 10000
