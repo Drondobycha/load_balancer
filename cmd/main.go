@@ -20,27 +20,28 @@ const (
 )
 
 func main() {
-
 	cfg := config.MustLoad()
 	log.Print("starting application", slog.Any("config", cfg))
 	limiter := ratelimiter.NewRateLimiter(cfg.RateLimit.DefaultRate, cfg.RateLimit.DefaultCapacity, nil)
-
-	// Инициализация балансировщика
+	limiter.StartAutoRefill(5 * time.Second)
+	// Initialize load balancer
 	lb := balancer.NewLoadBalancer(cfg.Backends, cfg.HealsthCheckInterval)
-	if cfg.Strategy == round_robin {
+	switch cfg.Strategy {
+	case round_robin:
 		lb.SetStrategy(&balancer.RoundRobinStrategy{})
 		log.Printf("Using round robin strategy")
-	} else if cfg.Strategy == least_conn {
+	case least_conn:
 		leastConn := balancer.NewLeastConnStrategy()
 		lb.SetStrategy(leastConn)
 		log.Printf("Using least connection strategy")
-	} else {
+	default:
 		log.Fatalf("Unknown strategy: %s", cfg.Strategy)
 	}
-	// Запуск health checks
+
+	// Start health checks
 	go lb.StartHealthChecks()
 
-	// Создание HTTP сервера
+	// Create HTTP server
 	srv := server.NewServer(cfg.Port, lb, limiter)
 
 	// Graceful shutdown
@@ -63,6 +64,9 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
+
+	// Stop rate limiter
+	limiter.Stop()
 
 	log.Println("Server exiting")
 }

@@ -2,6 +2,7 @@ package ratelimiter
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -102,7 +103,7 @@ func (rl *RateLimiter) Allow(clientIP, endpoint string) bool {
 	})
 
 	// Обновляем время последней активности
-	client.(*Client).lastSeen = now.UnixNano()
+	atomic.StoreInt64(&client.(*Client).lastSeen, now.UnixNano())
 
 	// Получаем или создаем bucket
 	bucket, _ := client.(*Client).buckets.LoadOrStore(endpoint, func() *TokenBucket {
@@ -142,4 +143,45 @@ func (rl *RateLimiter) cleanupInactiveClients() {
 			return
 		}
 	}
+}
+
+func (rl *RateLimiter) StartAutoRefill(interval time.Duration) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				rl.clients.Range(func(key, value interface{}) bool {
+					client := value.(*Client)
+					client.buckets.Range(func(endpoint, bucket interface{}) bool {
+						tb := bucket.(*TokenBucket)
+						tb.mu.Lock()
+						defer tb.mu.Unlock()
+
+						// Рассчитываем количество токенов для добавления
+						now := time.Now().UnixNano()
+						nsSinceRefill := now - tb.lastRefill
+						secondsSinceRefill := float64(nsSinceRefill) / 1e9
+						tokensToAdd := int32(secondsSinceRefill * float64(tb.config.Rate))
+
+						if tokensToAdd > 0 {
+							if newTokens := tb.tokens + tokensToAdd; newTokens <= int32(tb.config.Capacity) {
+								tb.tokens = newTokens
+							} else {
+								tb.tokens = int32(tb.config.Capacity)
+							}
+							tb.lastRefill = now
+						}
+
+						return true
+					})
+					return true
+				})
+			case <-rl.closeCh:
+				return
+			}
+		}
+	}()
 }
