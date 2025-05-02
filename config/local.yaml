@@ -1,9 +1,9 @@
-port: "8080"
-strategy: least_conn
-backends:
+port: "8080"                     # Порт для HTTP-сервера
+strategy: least_conn             # Стратегия балансировки (round_robin или least_conn)
+backends:                        # Список бэкендов
   - "http://backend1:80"
   - "http://backend2:80"
-health_check_interval: 30s
-rate_limit:
-  default_capacity: 10000
-  default_rate: 10000
+health_check_interval: 30s       # Интервал проверки состояния бэкендов
+rate_limit:                      # Настройки ограничения запросов
+  default_capacity: 10000        # Максимальное количество токенов
+  default_rate: 10000            # Скорость пополнения токенов
